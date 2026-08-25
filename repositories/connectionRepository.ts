@@ -1,40 +1,24 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { dataFilePath } from "@/lib/env";
+import { firestore } from "@/lib/firebaseAdmin";
 import type { DriveConnection } from "@/types/drive";
 
-interface Store { version: 1; connections: DriveConnection[] }
-const EMPTY: Store = { version: 1, connections: [] };
-let writeQueue: Promise<void> = Promise.resolve();
-
-async function readStore(): Promise<Store> {
-  try {
-    const parsed = JSON.parse(await readFile(path.resolve(dataFilePath()), "utf8")) as Store;
-    if (parsed.version !== 1 || !Array.isArray(parsed.connections)) throw new Error("Unsupported data file format");
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return EMPTY;
-    throw new Error(`Cannot read Driver Bridge data file: ${(error as Error).message}`);
-  }
-}
-
-async function mutate(mutator: (store: Store) => void): Promise<void> {
-  const operation = writeQueue.then(async () => {
-    const file = path.resolve(dataFilePath());
-    const store = await readStore();
-    mutator(store);
-    await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-    const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
-    await rename(temporary, file);
-  });
-  writeQueue = operation.catch(() => undefined);
-  return operation;
-}
+const collection = firestore.collection("driverBridgeConnections");
 
 export const connectionRepository = {
-  list: async () => (await readStore()).connections,
-  get: async (id: string) => (await readStore()).connections.find((item) => item.id === id),
-  add: async (connection: DriveConnection) => mutate((store) => { store.connections.push(connection); }),
-  remove: async (id: string) => mutate((store) => { store.connections = store.connections.filter((item) => item.id !== id); }),
+  list: async () => {
+    const snapshot = await collection.orderBy("createdAt", "asc").get();
+    return snapshot.docs.map((document) => document.data() as DriveConnection);
+  },
+  get: async (id: string) => {
+    const document = await collection.doc(id).get();
+    return document.exists ? (document.data() as DriveConnection) : undefined;
+  },
+  add: async (connection: DriveConnection) => {
+    await collection.doc(connection.id).create(connection);
+  },
+  replace: async (connection: DriveConnection) => {
+    await collection.doc(connection.id).set(connection);
+  },
+  remove: async (id: string) => {
+    await collection.doc(id).delete();
+  },
 };
