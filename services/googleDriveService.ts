@@ -8,7 +8,7 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const APP_PROPERTY = "driverBridge";
 
-interface OAuthState { name: string; folderId: string; expiresAt: number }
+interface OAuthState { name: string; folderId: string; connectionId?: string; expiresAt: number }
 interface UploadState { connectionId: string; sessionUrl: string; expiresAt: number }
 
 function callbackUrl() { return requiredEnv("GOOGLE_OAUTH_REDIRECT_URI"); }
@@ -21,8 +21,8 @@ export function extractFolderId(input: string): string {
   return id;
 }
 
-export function createOAuthUrl(name: string, folderInput: string): string {
-  const state = signPayload({ name, folderId: extractFolderId(folderInput), expiresAt: Date.now() + 10 * 60_000 });
+export function createOAuthUrl(name: string, folderInput: string, connectionId?: string): string {
+  const state = signPayload({ name, folderId: extractFolderId(folderInput), connectionId, expiresAt: Date.now() + 10 * 60_000 });
   const params = new URLSearchParams({
     client_id: requiredEnv("GOOGLE_CLIENT_ID"), redirect_uri: callbackUrl(), response_type: "code",
     scope: "https://www.googleapis.com/auth/drive", access_type: "offline", prompt: "consent select_account", state,
@@ -33,7 +33,10 @@ export function createOAuthUrl(name: string, folderInput: string): string {
 async function tokenRequest(params: URLSearchParams): Promise<Record<string, unknown>> {
   const response = await fetch(TOKEN_URL, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: params });
   const data = await response.json() as Record<string, unknown>;
-  if (!response.ok) throw new AppError("OAUTH_ERROR", String(data.error_description || data.error || "Google OAuth failed"), 400);
+  if (!response.ok) {
+    if (String(data.error || "") === "invalid_grant") throw new AppError("GOOGLE_RECONNECT_REQUIRED", "Phiên Google Drive đã hết hạn hoặc bị thu hồi. Hãy kết nối lại Drive.", 401);
+    throw new AppError("OAUTH_ERROR", String(data.error_description || data.error || "Google OAuth failed"), 400);
+  }
   return data;
 }
 
@@ -72,7 +75,9 @@ export async function completeOAuth(code: string, stateToken: string): Promise<v
     code, grant_type: "authorization_code", redirect_uri: callbackUrl(),
   }));
   if (!tokens.refresh_token) throw new AppError("MISSING_REFRESH_TOKEN", "Google did not return a refresh token; revoke access and try again", 400);
-  const provisional: DriveConnection = { id: crypto.randomUUID(), name: state.name, email: "", folderId: state.folderId, folderName: "", encryptedRefreshToken: encrypt(String(tokens.refresh_token)), createdAt: new Date().toISOString() };
+  const existing = state.connectionId ? await connectionRepository.get(state.connectionId) : undefined;
+  if (state.connectionId && (!existing || existing.folderId !== state.folderId)) throw new AppError("INVALID_RECONNECT", "Drive connection could not be reconnected", 400);
+  const provisional: DriveConnection = { id: existing?.id || crypto.randomUUID(), name: state.name, email: "", folderId: state.folderId, folderName: "", encryptedRefreshToken: encrypt(String(tokens.refresh_token)), createdAt: existing?.createdAt || new Date().toISOString() };
   const [folder, about] = await Promise.all([
     jsonOrError<{ id: string; name: string; mimeType: string; trashed?: boolean; capabilities?: { canAddChildren?: boolean; canDelete?: boolean } }>(await googleFetch(provisional, `${DRIVE_API}/files/${encodeURIComponent(state.folderId)}?fields=id,name,mimeType,trashed,capabilities(canAddChildren,canDelete)`)),
     jsonOrError<{ user: { emailAddress: string } }>(await googleFetch(provisional, `${DRIVE_API}/about?fields=user(emailAddress)`)),
@@ -80,7 +85,7 @@ export async function completeOAuth(code: string, stateToken: string): Promise<v
   if (folder.mimeType !== "application/vnd.google-apps.folder" || folder.trashed) throw new AppError("INVALID_FOLDER", "Selected item is not an active folder", 400);
   if (!folder.capabilities?.canAddChildren || !folder.capabilities?.canDelete) throw new AppError("INSUFFICIENT_FOLDER_PERMISSION", "The Google account cannot upload to and delete this folder", 403);
   provisional.folderName = folder.name; provisional.email = about.user.emailAddress;
-  await connectionRepository.add(provisional);
+  if (existing) await connectionRepository.replace(provisional); else await connectionRepository.add(provisional);
 }
 
 export async function getConnection(id: string): Promise<DriveConnection> {
