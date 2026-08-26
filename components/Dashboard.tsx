@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DriveMedia, PublicConnection } from "@/types/drive";
-import type { TaskItem, TaskStatus } from "@/types/task";
+import type { TaskItem, TaskPriority, TaskStatus } from "@/types/task";
 
 type ApiResult<T> = { data: T; error: { code: string; message: string } | null };
 class ApiError extends Error {
@@ -27,11 +27,12 @@ type UploadItem = {
   error?: string;
 };
 type Layout = "grid" | "focus" | "strip";
-const taskStatusLabel: Record<TaskStatus, string> = {
-  todo: "Cần làm",
-  doing: "Đang làm",
-  done: "Hoàn thành",
+const taskPriorityLabel: Record<TaskPriority, string> = {
+  low: "LOW",
+  medium: "MEDIUM",
+  high: "HIGH",
 };
+const taskPriorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -71,8 +72,11 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState("");
+  const [editingTaskPriority, setEditingTaskPriority] = useState<TaskPriority>("medium");
+  const [taskTab, setTaskTab] = useState<TaskStatus>("todo");
   const [selected, setSelected] = useState<DriveMedia[]>([]);
   const [layout, setLayout] = useState<Layout>("grid");
   const [filters, setFilters] = useState({
@@ -152,10 +156,11 @@ export default function Dashboard() {
       const task = await api<TaskItem>("/api/tasks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, priority: taskPriority }),
       });
       setTasks((items) => [task, ...items]);
       setTaskTitle("");
+      setTaskPriority("medium");
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -172,14 +177,14 @@ export default function Dashboard() {
       setMessage((error as Error).message);
     }
   }
-  async function saveTaskTitle(id: string) {
+  async function saveTask(id: string) {
     const title = editingTaskTitle.trim();
     try {
       if (title) {
         const task = await api<TaskItem>(`/api/tasks/${id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title }),
+          body: JSON.stringify({ title, priority: editingTaskPriority }),
         });
         setTasks((items) => items.map((item) => (item.id === id ? task : item)));
       }
@@ -190,6 +195,16 @@ export default function Dashboard() {
       setEditingTaskTitle("");
     }
   }
+  function editTask(task: TaskItem) {
+    setEditingTaskId(task.id);
+    setEditingTaskTitle(task.title);
+    setEditingTaskPriority(task.priority);
+  }
+  const sortedTasks = useMemo(
+    () => [...tasks].sort((a, b) => taskPriorityOrder[a.priority] - taskPriorityOrder[b.priority]),
+    [tasks]
+  );
+  const visibleTasks = sortedTasks.filter((task) => task.status === taskTab);
   async function removeTask(id: string) {
     try {
       await api(`/api/tasks/${id}`, { method: "DELETE" });
@@ -364,10 +379,10 @@ export default function Dashboard() {
             <button className="nav-active">
               <Icon>▦</Icon> Tất cả media <span>{gallery.pagination.total}</span>
             </button>
-            <button className="nav-item" onClick={() => setFilters({ ...filters, type: "image" })}>
+            <button className="nav-item nav-sub" onClick={() => setFilters({ ...filters, type: "image" })}>
               <Icon>▧</Icon> Hình ảnh
             </button>
-            <button className="nav-item" onClick={() => setFilters({ ...filters, type: "video" })}>
+            <button className="nav-item nav-sub" onClick={() => setFilters({ ...filters, type: "video" })}>
               <Icon>▷</Icon> Video
             </button>
             <button className="nav-item" onClick={() => setShowStudio(true)}>
@@ -526,11 +541,11 @@ export default function Dashboard() {
         </section>
       </div>
       {showTasks && (
-        <div className="modal">
-          <div className="modal-card tasks-card">
+        <div className="modal" onMouseDown={() => setShowTasks(false)}>
+          <div className="modal-card tasks-card" onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
-                <p className="eyebrow">local checklist</p>
+                <p className="eyebrow">công việc</p>
                 <h2 className="font-serif text-3xl font-semibold">Việc muốn làm</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {tasks.filter((task) => task.status === "done").length}/{tasks.length} việc đã hoàn thành
@@ -538,81 +553,79 @@ export default function Dashboard() {
               </div>
               <button aria-label="Đóng danh sách công việc" onClick={() => setShowTasks(false)}>×</button>
             </div>
-            <form className="flex gap-2" onSubmit={addTask}>
-              <input
-                className="field"
-                value={taskTitle}
-                maxLength={160}
-                onChange={(event) => setTaskTitle(event.target.value)}
-                placeholder="Nhập một việc muốn làm..."
-                autoFocus
-              />
-              <button className="btn-primary" disabled={!taskTitle.trim()}>Thêm việc</button>
-            </form>
+            <div className="task-tabs">
+              <button className={taskTab === "todo" ? "active" : ""} onClick={() => setTaskTab("todo")}>Chưa hoàn thành ({tasks.filter((task) => task.status !== "done").length})</button>
+              <button className={taskTab === "done" ? "active" : ""} onClick={() => setTaskTab("done")}>Đã hoàn thành ({tasks.filter((task) => task.status === "done").length})</button>
+            </div>
+            {taskTab === "todo" && (
+              <form className="task-create" onSubmit={addTask}>
+                <input className="field" value={taskTitle} maxLength={160} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Nhập một việc muốn làm..." autoFocus />
+                <select className={`field task-priority-select priority-${taskPriority}`} aria-label="Chọn mức ưu tiên" value={taskPriority} onChange={(event) => setTaskPriority(event.target.value as TaskPriority)}>
+                  {(Object.keys(taskPriorityLabel) as TaskPriority[]).map((priority) => (
+                    <option key={priority} value={priority}>{taskPriorityLabel[priority]}</option>
+                  ))}
+                </select>
+                <button className="btn-primary" disabled={!taskTitle.trim()}>Thêm việc</button>
+              </form>
+            )}
             <div className="mt-5 flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1">
-              {tasks.map((task) => (
-                <div className={`task-row ${task.status === "done" ? "task-done" : ""}`} key={task.id}>
+              {visibleTasks.map((task) => (
+                <div className={`task-row ${task.status === "done" ? "task-done" : ""}`} key={task.id} onClick={() => editTask(task)}>
                   <button
                     className="task-check"
+                    type="button"
                     title={task.status === "done" ? "Đánh dấu chưa xong" : "Đánh dấu hoàn thành"}
-                    onClick={() => updateTaskStatus(task.id, task.status === "done" ? "todo" : "done")}
+                    onClick={(event) => { event.stopPropagation(); updateTaskStatus(task.id, task.status === "done" ? "todo" : "done"); }}
                   >
                     {task.status === "done" ? "✓" : ""}
                   </button>
                   <div className="min-w-0 flex-1">
-                    {editingTaskId === task.id ? (
-                      <input
-                        className="field py-1.5"
-                        value={editingTaskTitle}
-                        maxLength={160}
-                        onChange={(event) => setEditingTaskTitle(event.target.value)}
-                        onBlur={() => saveTaskTitle(task.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") saveTaskTitle(task.id);
-                          if (event.key === "Escape") setEditingTaskId(null);
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        className="block w-full truncate text-left text-sm font-medium"
-                        title="Nhấn để sửa"
-                        onClick={() => {
-                          setEditingTaskId(task.id);
-                          setEditingTaskTitle(task.title);
-                        }}
-                      >
-                        {task.title}
-                      </button>
-                    )}
+                    <p className="task-title" title="Nhấn để sửa">{task.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(task.createdAt))}
                     </p>
                   </div>
-                  <select
-                    className="task-status"
-                    aria-label={`Trạng thái của ${task.title}`}
-                    value={task.status}
-                    onChange={(event) => updateTaskStatus(task.id, event.target.value as TaskStatus)}
-                  >
-                    {(Object.keys(taskStatusLabel) as TaskStatus[]).map((status) => (
-                      <option key={status} value={status}>{taskStatusLabel[status]}</option>
-                    ))}
-                  </select>
-                  <button className="icon-danger" title="Xóa công việc" onClick={() => removeTask(task.id)}>×</button>
+                  <span className={`task-priority priority-${task.priority}`}>{taskPriorityLabel[task.priority]}</span>
+                  <button className="icon-danger" type="button" title="Xóa công việc" onClick={(event) => { event.stopPropagation(); removeTask(task.id); }}>×</button>
                 </div>
               ))}
-              {tasksLoaded && !tasks.length && (
+              {tasksLoaded && !visibleTasks.length && (
                 <div className="empty min-h-48">
                   <span className="text-3xl">✓</span>
-                  <p className="mt-2 text-sm">Chưa có việc nào. Thêm việc đầu tiên nhé.</p>
+                  <p className="mt-2 text-sm">{taskTab === "done" ? "Chưa có việc nào hoàn thành." : "Chưa có việc nào. Thêm việc đầu tiên nhé."}</p>
                 </div>
               )}
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Danh sách được lưu trên Firebase và dùng chung cho mọi thiết bị truy cập ứng dụng.
-            </p>
           </div>
+        </div>
+      )}
+      {editingTaskId && (
+        <div className="modal z-[60]" onMouseDown={() => setEditingTaskId(null)}>
+          <form className="modal-card" onSubmit={(event) => { event.preventDefault(); saveTask(editingTaskId); }} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">chỉnh sửa</p>
+                <h2 className="font-serif text-2xl font-semibold">Sửa công việc</h2>
+              </div>
+              <button type="button" aria-label="Đóng chỉnh sửa" onClick={() => setEditingTaskId(null)}>×</button>
+            </div>
+            <label className="label">
+              Nội dung công việc
+              <textarea className="field mt-2 min-h-28 resize-y" value={editingTaskTitle} maxLength={160} onChange={(event) => setEditingTaskTitle(event.target.value)} autoFocus />
+            </label>
+            <div className="mt-4">
+              <p className="label">Mức ưu tiên</p>
+              <div className="priority-picker mt-2">
+                {(Object.keys(taskPriorityLabel) as TaskPriority[]).map((priority) => (
+                  <button type="button" key={priority} aria-pressed={editingTaskPriority === priority} className={`task-priority priority-${priority} ${editingTaskPriority === priority ? "selected" : ""}`} onClick={() => setEditingTaskPriority(priority)}>{taskPriorityLabel[priority]}</button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setEditingTaskId(null)}>Hủy</button>
+              <button className="btn-primary" disabled={!editingTaskTitle.trim()}>Lưu thay đổi</button>
+            </div>
+          </form>
         </div>
       )}
       {showConnect && (
