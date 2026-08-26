@@ -7,9 +7,10 @@ export const runtime = "nodejs";
 const updateSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
-    status: z.enum(["todo", "doing", "done"]).optional(),
+    status: z.enum(["todo", "done"]).optional(),
+    priority: z.enum(["high", "medium", "low"]).optional(),
   })
-  .refine((value) => value.title !== undefined || value.status !== undefined, "No changes supplied");
+  .refine((value) => value.title !== undefined || value.status !== undefined || value.priority !== undefined, "No changes supplied");
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const rid = requestId(request);

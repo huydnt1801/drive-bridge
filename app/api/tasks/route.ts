@@ -6,7 +6,10 @@ import { AppError, errorResponse, requestId } from "@/lib/http";
 import type { TaskItem } from "@/types/task";
 
 export const runtime = "nodejs";
-const createSchema = z.object({ title: z.string().trim().min(1).max(160) });
+const createSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  priority: z.enum(["high", "medium", "low"]).default("medium"),
+});
 
 export async function GET(request: Request) {
   const id = requestId(request);
@@ -26,6 +29,7 @@ export async function POST(request: Request) {
       id: randomUUID(),
       title: input.title,
       status: "todo",
+      priority: input.priority,
       createdAt: now,
       updatedAt: now,
     };

@@ -7,7 +7,7 @@
 @layer base {
   html { background: hsl(var(--background)); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
   body { @apply bg-background text-foreground; background-image: radial-gradient(circle at 8% 0%, hsl(var(--accent) / 0.18), transparent 28rem), radial-gradient(circle at 92% 20%, hsl(var(--primary) / 0.08), transparent 24rem); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-  button, input, select { font: inherit; }
+  button, input, select, textarea { font: inherit; }
 }
 
 @layer components {
@@ -23,9 +23,10 @@
   .eyebrow { @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground; }
   .brand-mark { @apply flex size-12 items-center justify-center overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border; }
   .brand-mark img { @apply size-full object-contain p-0.5; }
-  .nav-active, .nav-item { @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition; }
-  .nav-active { @apply bg-primary/10 font-medium text-primary; }
-  .nav-item { @apply text-muted-foreground hover:bg-muted hover:text-foreground; }
+  .nav-active, .nav-item { @apply mt-1.5 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-base font-medium transition; }
+  .nav-active { @apply bg-primary/15 font-semibold text-primary shadow-sm ring-1 ring-primary/15; }
+  .nav-item { @apply text-foreground/75 hover:bg-muted hover:text-foreground; }
+  .nav-item.nav-sub { @apply ml-4 mt-0.5 w-[calc(100%-1rem)] py-2 text-sm font-normal text-muted-foreground; }
   .nav-active span, .nav-item span { @apply ml-auto text-xs; }
   .folder-row { @apply flex items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-muted; }
   .folder-icon { @apply text-primary; }
@@ -57,10 +58,26 @@
   .layout-grid { background: linear-gradient(90deg, transparent 47%, currentColor 48%, currentColor 52%, transparent 53%), linear-gradient(0deg, transparent 47%, currentColor 48%, currentColor 52%, transparent 53%); }
   .layout-focus { @apply w-8; }
   .layout-strip { background: linear-gradient(90deg, transparent 23%, currentColor 24%, currentColor 26%, transparent 27%, transparent 48%, currentColor 49%, currentColor 51%, transparent 52%, transparent 73%, currentColor 74%, currentColor 76%, transparent 77%); }
-  .task-row { @apply flex items-center gap-3 rounded-xl border border-border bg-background p-3 transition; }
+  .task-row { @apply flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background p-3 transition hover:border-primary/40 hover:bg-primary/5 sm:items-center; }
   .task-done { @apply opacity-60; }
-  .task-done button[class*="text-left"] { @apply line-through; }
+  .task-done .task-title { @apply line-through; }
   .task-check { @apply flex size-6 shrink-0 items-center justify-center rounded-full border border-primary text-xs font-bold text-primary transition hover:bg-primary/10; }
   .task-done .task-check { @apply bg-primary text-primary-foreground; }
-  .task-status { @apply rounded-lg border border-border bg-card px-2 py-1.5 text-xs outline-none focus:border-primary; }
+  .task-tabs { @apply mb-3 flex gap-1 rounded-xl bg-muted p-1; }
+  .task-tabs button { @apply flex-1 rounded-lg px-2 py-2.5 text-xs font-medium text-muted-foreground transition sm:px-4 sm:text-sm; }
+  .task-tabs button.active { @apply bg-card text-foreground shadow-sm; }
+  .task-create { @apply grid items-center gap-2 sm:grid-cols-[1fr_108px_auto]; }
+  .task-priority-select { @apply w-full cursor-pointer appearance-none rounded-lg px-2 py-2 text-center text-[9px] font-bold tracking-[0.12em]; }
+  .task-priority-select:focus { @apply ring-2 ring-black/10; }
+  .task-priority-select option { @apply bg-card text-foreground; }
+  .priority-picker { @apply inline-flex overflow-hidden rounded-full; }
+  .task-title { @apply whitespace-normal break-words text-sm font-medium leading-5; }
+  .task-priority { @apply inline-flex shrink-0 items-center justify-center rounded-full border px-2.5 py-1 text-[9px] font-bold tracking-[0.1em] transition; }
+  button.task-priority { @apply min-w-16 rounded-none border-y border-l-0 opacity-65 hover:opacity-90; }
+  button.task-priority:first-child { @apply rounded-l-full border-l; }
+  button.task-priority:last-child { @apply rounded-r-full; }
+  button.task-priority.selected { @apply relative z-10 opacity-100 shadow-sm ring-1 ring-inset ring-black/20; }
+  .task-priority.priority-high, .task-priority-select.priority-high { border-color: #f0a0a7; background-color: #ffe5e8; color: #a81724; }
+  .task-priority.priority-medium, .task-priority-select.priority-medium { border-color: #e9b949; background-color: #fff1c7; color: #8a5700; }
+  .task-priority.priority-low, .task-priority-select.priority-low { border-color: #79c895; background-color: #def7e7; color: #146c38; }
 }
