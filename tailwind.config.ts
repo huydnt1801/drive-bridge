@@ -9,10 +9,10 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#eff6ff",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
+          50: "#f0fbff",
+          500: "#8ed9e8",
+          600: "#ef9fc6",
+          700: "#d87aaa",
         },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

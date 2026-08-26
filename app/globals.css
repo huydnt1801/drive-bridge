@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { --background: 338 55% 97%; --foreground: 335 22% 18%; --card: 0 0% 100%; --muted: 336 42% 93%; --muted-foreground: 334 14% 43%; --border: 336 32% 84%; --primary: 334 78% 53%; --primary-foreground: 0 0% 100%; --accent: 350 92% 72%; }
+:root { --background: 205 72% 97%; --foreground: 226 28% 24%; --card: 0 0% 100%; --muted: 204 55% 92%; --muted-foreground: 226 16% 48%; --border: 205 38% 82%; --primary: 330 72% 72%; --primary-foreground: 226 32% 22%; --accent: 195 72% 76%; }
 
 @layer base {
   html { background: hsl(var(--background)); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
