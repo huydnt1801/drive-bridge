@@ -326,7 +326,7 @@ export default function Dashboard() {
     canvas.height = 800;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.fillStyle = "#f4f2ed";
+    ctx.fillStyle = "#f4f8fb";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const cols = layout === "grid" ? 2 : 1;
     selected.slice(0, layout === "focus" ? 1 : 4).forEach((item, index) => {
